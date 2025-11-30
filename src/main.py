@@ -56,18 +56,17 @@ def main():
             gpu_beam_width = None # Exact mode
 
     # --- CPU DFS (Exact) ---
-    # Only run exact CPU DFS if N is small enough, otherwise it takes forever
-    if args.n <= 40:
-        print("\n--- Running CPU DFS Solver (Exact) ---")
-        cpu_solver = CpuDfsSolver()
-        res_cpu = cpu_solver.solve(instance)
-        print(f"Value: {res_cpu.best_value}")
-        print(f"Time:  {res_cpu.time_sec:.4f}s")
-        print(f"Nodes: {res_cpu.nodes_explored}")
-        exact_value = res_cpu.best_value
-    else:
-        print("\n[SKIP] CPU DFS skipped for N > 40 (too slow).")
-        exact_value = None
+    print("\n--- Running CPU DFS Solver (Exact) ---")
+    if args.n > 40:
+        print(f"⚠️  WARNING: N={args.n} is large! CPU DFS may take hours or days to complete.")
+        print("    Press Ctrl+C to cancel if it takes too long.")
+    
+    cpu_solver = CpuDfsSolver()
+    res_cpu = cpu_solver.solve(instance)
+    print(f"Value: {res_cpu.best_value}")
+    print(f"Time:  {res_cpu.time_sec:.4f}s")
+    print(f"Nodes: {res_cpu.nodes_explored}")
+    exact_value = res_cpu.best_value
 
     # --- GPU BFS (Heuristic or Exact) ---
     print(f"\n--- Running GPU BFS Solver ({'Heuristic' if gpu_beam_width else 'Exact'}) ---")

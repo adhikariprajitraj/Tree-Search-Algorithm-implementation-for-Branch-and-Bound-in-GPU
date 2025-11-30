@@ -44,8 +44,10 @@ class GpuBfsSolver(Solver):
                      beam_width: Optional[int],
                      max_depth: Optional[int],
                      time_limit: Optional[float]) -> BnBResult:
-        # ... (NumPy implementation from comparison.py) ...
-        # For brevity in this refactor, I will copy the NumPy logic here.
+        """
+        NumPy-based BFS solver with list-based solution tracking (no bitmasks).
+        This avoids integer overflow for large N.
+        """
         start = time.perf_counter()
         weights = instance.weights.copy()
         values = instance.values.copy()
@@ -57,21 +59,23 @@ class GpuBfsSolver(Solver):
         w = weights[order]
         v = values[order]
 
+        # Greedy initial solution
         remaining_cap = cap
         best_value = 0
-        best_mask = 0
+        best_items_sorted = []
         for i in range(n):
             if w[i] <= remaining_cap:
                 remaining_cap -= int(w[i])
                 best_value += int(v[i])
-                best_mask |= (1 << i)
+                best_items_sorted.append(i)
 
         best_solution_value = best_value
-        best_solution_mask = best_mask
+        best_solution_items = best_items_sorted.copy()
 
+        # Initialize BFS with empty solution
         curr_weights = np.array([0], dtype=np.int64)
         curr_values = np.array([0], dtype=np.int64)
-        curr_masks = np.array([0], dtype=np.int64)
+        curr_solutions = [[]]  # List of lists tracking which items are selected
         curr_index = 0
         nodes_explored = 0
 
@@ -114,28 +118,31 @@ class GpuBfsSolver(Solver):
             if time_limit is not None and (time.perf_counter() - start) > time_limit: break
 
             count = curr_weights.size
+            # Branch: create children (skip and take)
             new_weights = np.concatenate([curr_weights, curr_weights])
             new_values = np.concatenate([curr_values, curr_values])
-            new_masks = np.concatenate([curr_masks, curr_masks])
+            new_solutions = curr_solutions + [sol + [curr_index] for sol in curr_solutions]
 
+            # Add current item to second half
             new_weights[count:] += w[curr_index]
             new_values[count:] += v[curr_index]
-            new_masks[count:] |= (1 << curr_index)
 
+            # Feasibility check
             feasible = new_weights <= cap
             new_weights = new_weights[feasible]
             new_values = new_values[feasible]
-            new_masks = new_masks[feasible]
+            new_solutions = [new_solutions[i] for i in range(len(new_solutions)) if feasible[i]]
 
             if new_weights.size == 0: break
 
             next_index = curr_index + 1
             if next_index < n:
+                # Bounding and beam search
                 ub = fractional_bound_batch(new_weights, new_values, next_index)
                 keep = ub > best_solution_value
                 new_weights = new_weights[keep]
                 new_values = new_values[keep]
-                new_masks = new_masks[keep]
+                new_solutions = [new_solutions[i] for i in range(len(new_solutions)) if keep[i]]
                 ub = ub[keep]
                 if new_weights.size == 0: break
                 if beam_width is not None and new_weights.size > beam_width:
@@ -143,23 +150,24 @@ class GpuBfsSolver(Solver):
                     top_idx = idx_sorted[:beam_width]
                     new_weights = new_weights[top_idx]
                     new_values = new_values[top_idx]
-                    new_masks = new_masks[top_idx]
+                    new_solutions = [new_solutions[i] for i in top_idx]
             else:
+                # Leaf nodes - update best solution
                 for j in range(new_values.size):
                     if new_values[j] > best_solution_value:
                         best_solution_value = int(new_values[j])
-                        best_solution_mask = int(new_masks[j])
+                        best_solution_items = new_solutions[j].copy()
                 nodes_explored += new_weights.size
                 break
 
             curr_weights = new_weights
             curr_values = new_values
-            curr_masks = new_masks
+            curr_solutions = new_solutions
             curr_index = next_index
             nodes_explored += curr_weights.size
 
-        taken_sorted = [i for i in range(n) if best_solution_mask & (1 << i)]
-        taken_orig = [int(order[i]) for i in taken_sorted]
+        # Map back to original indices
+        taken_orig = [int(order[i]) for i in best_solution_items]
         taken_orig.sort()
         elapsed = time.perf_counter() - start
         optimal = (beam_width is None and max_depth is None and time_limit is None)
@@ -170,7 +178,10 @@ class GpuBfsSolver(Solver):
                      max_depth: Optional[int],
                      time_limit: Optional[float],
                      device: Optional[str]) -> BnBResult:
-        
+        """
+        PyTorch-based BFS solver with list-based solution tracking (no bitmasks).
+        This avoids integer overflow for large N.
+        """
         if device is None:
             if HAS_IPEX and hasattr(torch, 'xpu') and torch.xpu.is_available():
                 device = "xpu"
@@ -194,22 +205,24 @@ class GpuBfsSolver(Solver):
         w = weights[order]
         v = values[order]
 
+        # Greedy initial solution
         remaining_cap = cap
         best_value = 0.0
-        best_mask = 0
+        best_items_sorted = []
         for i in range(n):
             wi = float(w[i])
             if wi <= remaining_cap:
                 remaining_cap -= wi
                 best_value += float(v[i])
-                best_mask |= (1 << int(i))
+                best_items_sorted.append(i)
 
         best_solution_value = best_value
-        best_solution_mask = best_mask
+        best_solution_items = best_items_sorted.copy()
 
+        # Initialize BFS
         curr_weights = torch.zeros(1, dtype=torch.float32, device=device)
         curr_values = torch.zeros(1, dtype=torch.float32, device=device)
-        curr_masks = torch.zeros(1, dtype=torch.int64, device=device)
+        curr_solutions = [[]]  # List of lists tracking which items are selected
         curr_index = 0
         nodes_explored = 0
 
@@ -268,28 +281,33 @@ class GpuBfsSolver(Solver):
             if time_limit is not None and (time.perf_counter() - start) > time_limit: break
 
             count = curr_weights.numel()
+            # Branch: create children (skip and take)
             new_weights = torch.cat([curr_weights, curr_weights])
             new_values = torch.cat([curr_values, curr_values])
-            new_masks = torch.cat([curr_masks, curr_masks])
+            new_solutions = curr_solutions + [sol + [curr_index] for sol in curr_solutions]
 
+            # Add current item to second half
             new_weights[count:] = new_weights[count:] + w[curr_index]
             new_values[count:] = new_values[count:] + v[curr_index]
-            new_masks[count:] = new_masks[count:] | (1 << int(curr_index))
 
+            # Feasibility check
             feasible = new_weights <= cap
             new_weights = new_weights[feasible]
             new_values = new_values[feasible]
-            new_masks = new_masks[feasible]
+            feasible_cpu = feasible.cpu().numpy()
+            new_solutions = [new_solutions[i] for i in range(len(new_solutions)) if feasible_cpu[i]]
 
             if new_weights.numel() == 0: break
 
             next_index = curr_index + 1
             if next_index < n:
+                # Bounding and beam search
                 ub = fractional_bound_batch_torch(new_weights, new_values, next_index)
                 keep = ub > best_solution_value
                 new_weights = new_weights[keep]
                 new_values = new_values[keep]
-                new_masks = new_masks[keep]
+                keep_cpu = keep.cpu().numpy()
+                new_solutions = [new_solutions[i] for i in range(len(new_solutions)) if keep_cpu[i]]
                 ub = ub[keep]
                 if new_weights.numel() == 0: break
                 if beam_width is not None and new_weights.numel() > beam_width:
@@ -297,24 +315,26 @@ class GpuBfsSolver(Solver):
                     top_idx = idx_sorted[:beam_width]
                     new_weights = new_weights[top_idx]
                     new_values = new_values[top_idx]
-                    new_masks = new_masks[top_idx]
+                    top_idx_cpu = top_idx.cpu().numpy()
+                    new_solutions = [new_solutions[i] for i in top_idx_cpu]
             else:
+                # Leaf nodes - update best solution
                 for j in range(new_values.numel()):
                     if float(new_values[j]) > best_solution_value:
                         best_solution_value = float(new_values[j])
-                        best_solution_mask = int(new_masks[j].item())
+                        best_solution_items = new_solutions[j].copy()
                 nodes_explored += int(new_weights.numel())
                 break
 
             curr_weights = new_weights
             curr_values = new_values
-            curr_masks = new_masks
+            curr_solutions = new_solutions
             curr_index = next_index
             nodes_explored += int(curr_weights.numel())
 
-        taken_sorted = [i for i in range(n) if best_solution_mask & (1 << i)]
+        # Map back to original indices
         order_np = order.cpu().numpy()
-        taken_orig = [int(order_np[i]) for i in taken_sorted]
+        taken_orig = [int(order_np[i]) for i in best_solution_items]
         taken_orig.sort()
         elapsed = time.perf_counter() - start
         optimal = (beam_width is None and max_depth is None and time_limit is None)
