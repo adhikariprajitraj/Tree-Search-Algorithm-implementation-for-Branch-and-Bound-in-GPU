@@ -46,3 +46,8 @@ Thumbs.db
 
 # PyInstaller
 *.spec
+
+
+OVERFLOW_FIX.md
+GPU_PERFORMANCE_ISSUE.md
+GPU_VS_CPU_COMPARISON.md
