@@ -22,6 +22,8 @@ def main():
     parser.add_argument("--device", type=str, default=None, help="Device for GPU solver (cpu, cuda, mps, xpu)")
     parser.add_argument("--no_torch", action="store_true", help="Disable PyTorch usage")
     parser.add_argument("--hybrid", action="store_true", help="Use Hybrid Solver (GPU BFS -> CPU DFS)")
+    parser.add_argument("--time_limit", type=float, default=None, help="Time limit in seconds")
+    parser.add_argument("--switch_depth", type=int, default=12, help="Depth to switch from GPU to CPU in Hybrid mode")
     
     args = parser.parse_args()
 
@@ -72,6 +74,7 @@ def main():
     gpu_solver = GpuBfsSolver()
     res_gpu = gpu_solver.solve(instance, 
                                beam_width=gpu_beam_width,
+                               time_limit=args.time_limit,
                                device=args.device,
                                use_torch=not args.no_torch)
     print(f"Value: {res_gpu.best_value}")
@@ -84,7 +87,12 @@ def main():
         print("\n--- Running Hybrid Solver (GPU Warm Start -> CPU DFS) ---")
         hybrid_solver = HybridSolver()
         # Use a small switch depth to get a quick bound
-        res_hybrid = hybrid_solver.solve(instance, switch_depth=12, beam_width=2000, device=args.device, use_torch=not args.no_torch)
+        res_hybrid = hybrid_solver.solve(instance, 
+                                         switch_depth=args.switch_depth, 
+                                         beam_width=2000, 
+                                         time_limit=args.time_limit,
+                                         device=args.device, 
+                                         use_torch=not args.no_torch)
         print(f"Value: {res_hybrid.best_value}")
         print(f"Time:  {res_hybrid.time_sec:.4f}s")
         print(f"Nodes: {res_hybrid.nodes_explored}")
