@@ -58,7 +58,7 @@ def main():
     # --- CPU DFS (Exact) ---
     print("\n--- Running CPU DFS Solver (Exact) ---")
     if args.n > 40:
-        print(f"⚠️  WARNING: N={args.n} is large! CPU DFS may take hours or days to complete.")
+        print(f"⚠️  WARNING: N={args.n} is large! CPU DFS might work but may take hours or days to complete.")
         print("    Press Ctrl+C to cancel if it takes too long.")
     
     cpu_solver = CpuDfsSolver()

@@ -33,7 +33,7 @@ This project provides three solvers for the 0-1 Knapsack problem:
 - **Optimality**: Exact if no beam width, approximate with beam search
 - **Speed**: Slower than CPU for small N due to data transfer overhead
 - **Memory**: High (stores all nodes per level)
-- **When to use**: Large problems (N > 100) with beam search for fast approximate solutions
+- **When to use**: Large problems (N > 100) with beam search for fast approximate solutions (CPU might work but may take longer)
 
 ### 3. Hybrid Solver
 - **Algorithm**: GPU BFS to depth D, then CPU DFS from best nodes
@@ -109,7 +109,7 @@ python3 src/main.py --n 20
 ```bash
 python3 src/main.py --n 100
 ```
-**Expected**: Auto-enables beam search for GPU, CPU skipped (too slow)
+**Expected**: Auto-enables beam search for GPU, CPU might work but may take longer
 
 ### Solver-Specific Usage
 
@@ -371,7 +371,7 @@ python3 src/main.py --n 200 --beam 20000
 ```
 
 ### Need Exact Solution for Large N
-Use CPU DFS (be patient) or Hybrid:
+CPU DFS might work for large N (be patient) or use Hybrid:
 ```bash
 python3 src/main.py --n 100 --hybrid
 ```

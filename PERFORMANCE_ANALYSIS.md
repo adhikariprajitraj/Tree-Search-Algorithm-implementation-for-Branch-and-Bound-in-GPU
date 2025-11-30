@@ -165,8 +165,8 @@ Process 1000 knapsack instances simultaneously:
 - Could achieve speedup for N>50
 
 ### 2. Very Large N (N>1000)
-For extremely large problems where CPU takes hours:
-- CPU: May require exponential time despite pruning
+For extremely large problems:
+- CPU: Might work but may require exponential time despite pruning
 - GPU with beam search: Quick approximate solution
 - Trade optimality for speed
 
@@ -184,7 +184,7 @@ If surrounding pipeline is already on GPU:
 |----------|---------------|---------|
 | Small (N<100) | CPU DFS | `python3 src/main.py --n 50` |
 | Medium (N=100-300) | CPU DFS | `python3 src/main.py --n 200` |
-| Large (N>300) | CPU DFS first, fallback to GPU+beam if too slow | Try CPU, then `--beam 20000` |
+| Large (N>300) | CPU DFS might work, fallback to GPU+beam if needed | Try CPU, then `--beam 20000` |
 | Batch processing | Implement batched GPU solver | (Not currently implemented) |
 
 ### For Research/Education

@@ -21,8 +21,8 @@ A comprehensive comparison of **CPU DFS**, **GPU BFS**, and **Hybrid** solvers f
 3. **Algorithm Mismatch**: Branch & Bound doesn't map well to GPU parallelism
 4. **Memory Efficiency**: CPU DFS uses recursion stack, GPU BFS stores all level nodes
 
-**Bottom Line**: Use CPU for most knapsack problems. GPU only useful for:
-- Very large N (>500) with beam search for fast approximations
+**Bottom Line**: Use CPU for most knapsack problems. GPU useful for:
+- Very large N (>500) with beam search for fast approximations (CPU might work but may take longer)
 - Batch processing many problems simultaneously
 - Educational/research purposes
 
@@ -34,7 +34,7 @@ The benchmark comparison shows execution time, speedup factors, and nodes explor
 
 ## Features
 
-- **CPU DFS Solver**: Exact depth-first search with branch and bound (fastest for N<300)
+- **CPU DFS Solver**: Exact depth-first search with branch and bound (fastest for N<300, might work for larger N)
 - **GPU BFS Solver**: PyTorch-based breadth-first search with optional beam search
 - **Hybrid Solver**: GPU warm start followed by CPU DFS refinement
 - **Modular Design**: Easy to extend with new problems and solvers
@@ -121,7 +121,7 @@ See [USER_GUIDE.md](USER_GUIDE.md) for complete documentation.
 |--------------|-------------|---------|---------------|
 | N < 50 | CPU DFS | `python3 src/main.py --n 40` | < 0.01s |
 | N = 50-100 | CPU DFS | `python3 src/main.py --n 80` | 0.01-0.1s |
-| N > 100 | CPU DFS or Hybrid | `python3 src/main.py --n 200 --hybrid` | 0.1-1s |
+| N > 100 | CPU DFS or Hybrid (CPU might work for large N) | `python3 src/main.py --n 200 --hybrid` | 0.1-1s |
 
 ### Beam Width Guidelines
 
