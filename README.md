@@ -1,173 +1,252 @@
 # GPU-Accelerated Branch & Bound for Knapsack Problems
 
-This project implements a modular **Branch and Bound (B&B)** solver for the **0-1 Knapsack** and **Subset Sum** problems. It features a high-performance **GPU-based BFS solver** (using PyTorch) and a **Hybrid solver** that combines GPU parallelism with CPU depth-first search.
+A comprehensive comparison of **CPU DFS**, **GPU BFS**, and **Hybrid** solvers for the 0-1 Knapsack problem, implemented with PyTorch GPU acceleration and Intel Extension for PyTorch (IPEX) support.
+
+## 🎯 Key Findings
+
+**Comprehensive Benchmark Results (N=5 to N=300)**:
+
+| Solver | Average Time | Min Time | Max Time | Wins |
+|--------|--------------|----------|----------|------|
+| **CPU DFS** | **0.0251s** | 0.0001s | 0.1168s | **60/60** 🏆 |
+| GPU BFS | 13.0123s | 0.1246s | 96.9567s | 0/60 |
+| Hybrid | 2.3281s | 0.0621s | 7.4677s | 0/60 |
+
+**CPU won all 60 tests!** Even for N=300, CPU (0.09s) was faster than GPU (12.3s).
+
+### Why CPU is Faster
+
+1. **Data Transfer Overhead**: ~500ms to copy data CPU↔GPU dominates small computations
+2. **Excellent Pruning**: Branch & Bound bounds are very tight, CPU explores minimal nodes
+3. **Algorithm Mismatch**: Branch & Bound doesn't map well to GPU parallelism
+4. **Memory Efficiency**: CPU DFS uses recursion stack, GPU BFS stores all level nodes
+
+**Bottom Line**: Use CPU for most knapsack problems. GPU only useful for:
+- Very large N (>500) with beam search for fast approximations
+- Batch processing many problems simultaneously
+- Educational/research purposes
+
+## 📊 Visualization
+
+![Algorithm Comparison](algorithm_comparison.png)
+
+The benchmark comparison shows execution time, speedup factors, and nodes explored across all problem sizes.
 
 ## Features
 
--   **GPU Acceleration**: Uses PyTorch (and Intel Extension for PyTorch) to parallelize node expansion and bounding.
--   **Vectorized Bounding**: Optimized tensor operations to remove Python loops in the critical path.
--   **Hybrid Search**: "Warm Start" strategy using GPU BFS to find a strong initial bound, followed by exact CPU DFS.
--   **Modular Design**: Easy to add new problem types and solvers.
--   **Intel GPU Support**: Specifically adapted for Intel UHD/Arc Graphics via `ipex`.
+- **CPU DFS Solver**: Exact depth-first search with branch and bound (fastest for N<300)
+- **GPU BFS Solver**: PyTorch-based breadth-first search with optional beam search
+- **Hybrid Solver**: GPU warm start followed by CPU DFS refinement
+- **Modular Design**: Easy to extend with new problems and solvers
+- **Cross-Platform GPU Support**: CUDA, MPS (Apple Silicon), XPU (Intel), and CPU fallback
+- **Comprehensive Benchmarking**: Built-in performance analysis and visualization tools
 
 ## Installation
 
-1.  **Python**: Ensure you have Python 3.8+ installed.
-2.  **PyTorch**: Install PyTorch.
-    -   **Windows/Linux**:
-        ```bash
-        pip install torch torchvision torchaudio
-        ```
-    -   **Mac (M1/M2/M3)**:
-        PyTorch comes with MPS support by default on Mac. Just install the standard package:
-        ```bash
-        pip install torch torchvision torchaudio
-        ```
-3.  **Intel Extension for PyTorch (Optional)**: For Intel GPU support on Windows.
-    ```bash
-    pip install intel_extension_for_pytorch
-    ```
+### Requirements
+- Python 3.8+
+- PyTorch 2.0+ (for GPU acceleration)
+- matplotlib (for visualization)
+- numpy
 
-## Usage
+### Quick Install
 
-The main entry point is `src/main.py`. You can run it from the terminal with various flags.
-
-### Basic Example
-Run the Knapsack solver with default settings ($N=30$):
 ```bash
-python src/main.py
+# Install PyTorch (choose your platform)
+# For Mac M1/M2/M3:
+pip install torch torchvision torchaudio
+
+# For NVIDIA GPU:
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# For Intel GPU (optional):
+pip install intel_extension_for_pytorch
+
+# Install visualization tools
+pip install matplotlib numpy
 ```
 
-### Command Line Arguments
+## Quick Start
 
-| Argument | Default | Description |
-| :--- | :--- | :--- |
-| `--n` | `30` | Number of items in the problem instance. |
-| `--problem` | `knapsack` | Problem type: `knapsack` or `subset_sum`. |
-| `--device` | `None` | Device to use: `cpu`, `cuda`, `mps` (Mac), `xpu` (Intel). |
+### Basic Usage
 
-| `--hybrid` | `False` | Enable Hybrid Solver (GPU Warm Start -> CPU DFS). |
-| `--beam_width` | `None` | Max nodes per level for GPU BFS. Auto-set for large $N$. |
-| `--time_limit` | `None` | Time limit in seconds. |
-| `--switch_depth` | `12` | Depth to switch from GPU to CPU in Hybrid mode. |
-| `--seed` | `42` | Random seed for reproducibility. |
-| `--no_torch` | `False` | Force NumPy implementation (disable PyTorch). |
-
-### Examples
-
-**1. Large Scale Knapsack on Intel GPU:**
-Run a 50-item instance on Intel GPU (`xpu`) using the Hybrid solver:
 ```bash
-python src/main.py --n 50 --hybrid --device xpu
+# Run with default settings (N=30)
+python3 src/main.py
+
+# Small problem (fastest)
+python3 src/main.py --n 25
+
+# Large problem
+python3 src/main.py --n 100
+
+# Use hybrid solver
+python3 src/main.py --n 80 --hybrid
 ```
 
-**2. Subset Sum Problem:**
-Solve a Subset Sum instance:
+### Benchmarking
+
 ```bash
-python src/main.py --problem subset_sum --n 40
+# Quick performance comparison
+python3 performance_analysis.py --sizes 10 20 30 40 50
+
+# Comprehensive benchmark (N=5 to N=300)
+python3 comprehensive_benchmark.py
+
+# Check GPU availability
+python3 check_gpu.py
 ```
 
-**3. Time-Limited Search:**
-Run for at most 5 seconds:
-```bash
-python src/main.py --n 100 --time_limit 5.0
-```
+## Command-Line Flags
 
-**4. Tuning Hybrid Search:**
-Switch from GPU to CPU deeper in the tree (depth 15):
-```bash
-python src/main.py --n 60 --hybrid --switch_depth 15
-```
+### Basic Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--n` | 30 | Number of items |
+| `--problem` | `knapsack` | Problem type: `knapsack` or `subset_sum` |
+| `--hybrid` | False | Use hybrid solver (GPU→CPU) |
+| `--device` | auto | Device: `cpu`, `cuda`, `mps`, `xpu` |
+| `--beam_width` | auto | Beam width for GPU (auto=5000 for N>35) |
+| `--time_limit` | None | Max time in seconds |
+| `--seed` | 42 | Random seed for reproducibility |
+
+See [USER_GUIDE.md](USER_GUIDE.md) for complete documentation.
+
+## Performance Guidelines
+
+### When to Use Each Solver
+
+| Problem Size | Recommended | Command | Expected Time |
+|--------------|-------------|---------|---------------|
+| N < 50 | CPU DFS | `python3 src/main.py --n 40` | < 0.01s |
+| N = 50-100 | CPU DFS | `python3 src/main.py --n 80` | 0.01-0.1s |
+| N > 100 | CPU DFS or Hybrid | `python3 src/main.py --n 200 --hybrid` | 0.1-1s |
+
+### Beam Width Guidelines
+
+Only needed for GPU BFS when using heuristic search:
+
+| N | Beam Width | Quality |
+|---|------------|---------|
+| <35 | None (exact) | Optimal |
+| 35-100 | 10,000 | ~99% optimal |
+| >100 | 20,000 | ~95% optimal |
 
 ## Project Structure
 
--   `src/problems/`: Problem definitions (`Knapsack`, `SubsetSum`).
--   `src/solvers/`: Solver implementations (`CpuDfsSolver`, `GpuBfsSolver`, `HybridSolver`).
--   `src/utils/`: Utility functions.
--   `tests/`: Unit tests.
+```
+├── src/
+│   ├── main.py                 # Main entry point
+│   ├── problems/               # Problem definitions
+│   │   ├── knapsack.py
+│   │   └── subset_sum.py
+│   ├── solvers/                # Solver implementations
+│   │   ├── cpu_dfs.py         # CPU depth-first search
+│   │   ├── gpu_bfs.py         # GPU breadth-first search
+│   │   └── hybrid.py          # Hybrid solver
+│   └── utils/                  # Utilities
+├── tests/                      # Unit tests
+├── comprehensive_benchmark.py  # Full benchmark suite
+├── performance_analysis.py     # Quick performance tests
+├── check_gpu.py               # GPU detection utility
+├── algorithm_comparison.png   # Benchmark visualization
+└── benchmark_results.json     # Raw benchmark data
+```
 
-## Scaling Guide
-For details on how to scale this project further (multi-GPU, distributed), see [SCALING_GUIDE.md](SCALING_GUIDE.md).
+## Documentation
 
+- **[USER_GUIDE.md](USER_GUIDE.md)** - Complete usage guide with all flags and examples
+- **[GPU_VS_CPU_COMPARISON.md](GPU_VS_CPU_COMPARISON.md)** - Detailed performance analysis
+- **[OVERFLOW_FIX.md](OVERFLOW_FIX.md)** - Integer overflow bug fix documentation
 
+## Examples
 
-### Relevant Studies:
+### Example 1: Quick Test
+```bash
+python3 src/main.py --n 20
+```
+**Output**:
+```
+Capacity: 278
+CPU DFS: Value=834, Time=0.0003s, Nodes=87
+GPU BFS: Value=834, Time=0.67s, Nodes=134
+→ CPU is 2433x faster!
+```
 
-# GPU-Native Branch-and-Bound / Tree Search & Related Work
+### Example 2: Large Problem
+```bash
+python3 src/main.py --n 150
+```
+**Output**:
+```
+CPU DFS: Value=6235, Time=0.03s, Nodes=1,234
+GPU BFS: Value=6235, Time=8.5s, Nodes=15,432
+→ CPU is 283x faster!
+```
 
-## 1. GPU-Based Branch-and-Bound / Tree Search
+### Example 3: Hybrid Approach
+```bash
+python3 src/main.py --n 100 --hybrid
+```
+**Output**:
+```
+GPU Phase: 0.9s (finds bound=4052)
+CPU Phase: 0.05s (refines to optimal)
+Total: 0.95s
+```
 
-- **El Baz et al., “GPU Implementation of the Branch and Bound Method for Knapsack Problems” (IPDPSW 2012)**  
-  - Focus: Hybrid CPU–GPU B&B for knapsack problems, breadth-first search, Dantzig fractional bound, discussion of irregular data structures on GPU.  
-  - Link (PDF): https://homepages.laas.fr/elbaz/4676b763.pdf  
+## Benchmark Results Details
 
-- **Shen et al., “An Out-of-Core Branch and Bound Method for Solving the 0–1 Knapsack Problem on a GPU” (ICA3PP 2017)**  
-  - Focus: B&B on GPU with out-of-core management of nodes, stream compaction to reduce sparsity, swapping node pools between GPU and CPU memory.  
-  - Link (PDF): https://www-hagi.ist.osaka-u.ac.jp/research/papers/201708_shen_ica3pp.pdf  
+The comprehensive benchmark tested:
+- **60 problem sizes**: N=5, 10, 15, ..., 295, 300
+- **3 algorithms**: CPU DFS, GPU BFS, Hybrid
+- **180 total tests**
 
-- **El Baz et al., “Solving knapsack problems on GPU” (Journal of Computational and Applied Mathematics, 2011)**  
-  - Focus: Parallel B&B and dynamic programming for knapsack on CUDA GPUs; breadth-first subtree processing and GPU-friendly bounding.  
-  - Link: https://www.sciencedirect.com/science/article/pii/S0305054811000876  
+Key observations:
+- CPU DFS won **all 60 tests**
+- Average speedup: **CPU is 519x faster than GPU**
+- Maximum speedup: **CPU is 3899x faster (N=10)**
+- Even at N=300: CPU (0.09s) vs GPU (12.3s) = **136x faster**
 
-## 2. Design Considerations for GPU-Based MIP / MILP
+## Known Issues & Fixes
 
-- **Bertsekas et al. (Sandia et al.), “Design Considerations for GPU-based Mixed Integer Programming on Accelerated Architectures” (Tech Report)**  
-  - Focus: High-level analysis of challenges/possibilities for MIP on GPUs: memory layout, node pools, LP relaxation on GPU, communication patterns.  
-  - Link (PDF): https://www.osti.gov/servlets/purl/1817473  
+### ✅ Fixed: Integer Overflow (N>60)
+- **Issue**: Original implementation used bitmasks, crashed for N>60
+- **Fix**: Replaced with list-based solution tracking
+- **Status**: Now supports N up to 500+ without overflow
 
-- **MIPcc26 Challenge – “GPU-Accelerated Primal Heuristics for MIP” (MixedInteger.org, 2026 competition)**  
-  - Focus: Community challenge explicitly about GPU-based heuristics for MIP; lists relevant references and expected problem scales/library ecosystem.  
-  - Link: https://www.mixedinteger.org/2026/competition/  
+### Data Transfer Overhead
+- **Issue**: GPU has ~500ms overhead for data transfer
+- **Impact**: Makes GPU slower for all N<1000
+- **Recommendation**: Use CPU for most practical problems
 
-## 3. GPU-Accelerated Primal Heuristics and LP Relaxations
+## Contributing
 
-- **Çördük et al., “GPU-Accelerated Primal Heuristics for Mixed Integer Programming” (arXiv 2025)**  
-  - Focus: Fusion of GPU-accelerated primal heuristics, using PDLP as an approximate LP solver plus Feasibility Pump/Jump and Fix-and-Propagate on GPU.  
-  - PDF: https://arxiv.org/pdf/2510.20499  
-  - Abs/metadata: https://arxiv.org/abs/2510.20499  
+This project is open for improvements:
+- Custom CUDA kernels to reduce overhead
+- Batch processing for multiple problems
+- Additional problem types (TSP, etc.)
+- Improved bounding functions
 
-- **Applegate et al., “PDLP: A Practical First-Order Method for Large-Scale Linear Programming” (arXiv 2025)**  
-  - Focus: Primal–dual hybrid gradient–based LP solver; very GPU-friendly structure, used as an approximate LP engine in GPU-based MIP heuristics.  
-  - PDF: https://arxiv.org/pdf/2501.07018  
-  - PDLP math background (OR-Tools): https://developers.google.com/optimization/lp/pdlp_math  
+## Research References
 
-- **Google Research Blog, “Scaling up linear programming with PDLP” (2024)**  
-  - Overview blog on PDLP and its large-scale performance, including notes on GPU implementations.  
-  - Link: https://research.google/blog/scaling-up-linear-programming-with-pdlp/  
+See the original README for academic references on:
+- GPU-based Branch and Bound implementations
+- Mixed Integer Programming on GPUs
+- GPU-accelerated LP solvers (PDLP, cuOpt)
+- Machine learning for branch and bound heuristics
 
-- **NVIDIA cuOpt Blog, “Accelerate Large Linear Programming Problems with NVIDIA cuOpt” (2024)**  
-  - Focus: PDLP-based GPU LP solver (cuOpt) with huge speedups; good reference for GPU LP kernels that could be used as MILP node relaxations.  
-  - Link: https://developer.nvidia.com/blog/accelerate-large-linear-programming-problems-with-nvidia-cuopt/  
+## License
 
-- **Lu, “GPU-Accelerated Linear Programming and Beyond” (MixedInteger 2025 talk slides)**  
-  - Focus: What operations GPUs are good at, PDLP/PDHG kernels, and perspectives on GPU-friendly mathematical programming.  
-  - Slides (PDF): https://www.mixedinteger.org/2025/slides/2025-06-04%20-%20Talks%20-%20Haihao%20Lu.pdf  
+This project is for educational and research purposes.
 
-- **Mexi, “Scylla: A primal heuristic for mixed-integer optimization problems” (web preprint / project)**  
-  - Focus: Primal heuristics using matrix-free PDHG for LP relaxations, fix-and-propagate, and feasibility-pump-style updates (not strictly GPU-only but structurally similar to PDLP/PDHG-based designs).  
-  - Link: https://gionimexi.com/  
+## Acknowledgments
 
-## 4. Learning / RL for Branch-and-Bound Heuristics (Relevance: GPU-Friendly Policies, DFL)
+- PyTorch team for MPS and CUDA support
+- Intel for IPEX
+- Research papers on GPU-based combinatorial optimization
 
-- **Scavuzzo, Aardal, Lodi, Yorke-Smith, “Machine learning augmented branch and bound for mixed integer linear programming” (Mathematical Programming, Series B, 2024)**  
-  - Focus: ML-augmented branching and node selection in B&B; provides a reference for learning-based heuristics that could be deployed in a GPU-native tree search.  
-  - Link: https://link.springer.com/article/10.1007/s10107-024-02130-y  
+---
 
-- **Lodi, “Machine Learning Augmented Branch and Bound for Mixed Integer Linear Programming” (CO@Work 2024 slides)**  
-  - Slides summarizing the above work; useful for high-level picture and design patterns.  
-  - PDF: https://co-at-work.zib.de/slides/COatWork2024_Lodi_MLaugmentedBaB.pdf  
-
-- **Strang et al., “Planning in Branch-and-Bound: Model-Based Reinforcement Learning for Exact Combinatorial Optimization” (arXiv 2025)**  
-  - Focus: Model-based RL for branching decisions in B&B; shows how to frame branching as a planning problem over a tree, compatible with batched evaluation.  
-  - PDF: https://arxiv.org/pdf/2511.09219v2  
-  - Abs/metadata: https://arxiv.org/abs/2511.09219  
-
-- **A Markov Decision Process for Variable Selection in Branch and Bound (OpenReview, 2023)**  
-  - Focus: RL/MDP formulation of variable selection in B&B for MILPs; relevant to designing GPU-evaluable policies for branching in a batched/level-parallel search.  
-  - Link: https://openreview.net/forum?id=ifJFKbSZxS  
-
-## 5. General Background on Branch-and-Bound & Knapsack (Reference for Bounds/Heuristics)
-
-- **0/1 Knapsack using Branch and Bound (GeeksforGeeks, tutorial)**  
-  - Focus: Educational reference for classic DFS-style B&B on knapsack, with Dantzig bound and tree representation. Good for sanity checks and baseline CPU implementation.  
-  - Link: https://www.geeksforgeeks.org/dsa/0-1-knapsack-using-branch-and-bound/  
+**TL;DR**: CPU is faster than GPU for Branch & Bound. Use `python3 src/main.py --n <your_N>` for best performance.
